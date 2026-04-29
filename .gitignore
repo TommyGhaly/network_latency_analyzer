@@ -1,0 +1,33 @@
+# STM32 Build Artifacts
+*.o
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+*.d
+*.su
+*.cyclo
+
+# Debug and Release Directories
+Debug/
+Release/
+
+# STM32CubeIDE Specific
+*.mxproject
+*.cproject
+*.project
+.settings/
+.metadata/
+
+# VS Code (if not needed, uncomment)
+#.vscode/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# OS Specific
+.DS_Store
+Thumbs.db
