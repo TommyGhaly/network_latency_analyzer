@@ -63,11 +63,17 @@ void Error_Handler(void);
 #define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
 #define USART_RX_GPIO_Port GPIOA
+#define TFT_CS_Pin GPIO_PIN_10
+#define TFT_CS_GPIO_Port GPIOB
+#define TFT_RST_Pin GPIO_PIN_7
+#define TFT_RST_GPIO_Port GPIOC
 #define W5500_INT_Pin GPIO_PIN_8
 #define W5500_INT_GPIO_Port GPIOA
 #define W5500_INT_EXTI_IRQn EXTI9_5_IRQn
 #define W5500_RST_Pin GPIO_PIN_9
 #define W5500_RST_GPIO_Port GPIOA
+#define TFT_DC_Pin GPIO_PIN_10
+#define TFT_DC_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14

@@ -65,7 +65,31 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#include "wizchip_conf.h"
+#include "w5500.h"
+#include "st7789.h"
+#include "fonts.h"
+#include <stdio.h>
+#include <string.h>
 
+
+void W5500_Select(void) {
+    HAL_GPIO_WritePin(W5500_CS_GPIO_Port, W5500_CS_Pin, GPIO_PIN_RESET);
+}
+
+void W5500_Unselect(void) {
+    HAL_GPIO_WritePin(W5500_CS_GPIO_Port, W5500_CS_Pin, GPIO_PIN_SET);
+}
+
+uint8_t W5500_ReadByte(void) {
+    uint8_t byte;
+    HAL_SPI_Receive(&hspi1, &byte, 1, HAL_MAX_DELAY);
+    return byte;
+}
+
+void W5500_WriteByte(uint8_t byte) {
+    HAL_SPI_Transmit(&hspi1, &byte, 1, HAL_MAX_DELAY);
+}
 /* USER CODE END 0 */
 
 /**
@@ -101,7 +125,26 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   MX_USART2_UART_Init();
+
   /* USER CODE BEGIN 2 */
+
+  ST7789_Init();
+  HAL_Delay(100);
+  ST7789_Fill_Color(RED);
+  HAL_Delay(1000);
+  ST7789_Fill_Color(BLUE);
+  ST7789_WriteString(10, 10, "Hello World", Font_11x18, WHITE, BLACK);
+
+  reg_wizchip_cs_cbfunc(W5500_Select, W5500_Unselect);
+  reg_wizchip_spi_cbfunc(W5500_ReadByte, W5500_WriteByte);
+
+  // Reset W5500
+  HAL_GPIO_WritePin(W5500_RST_GPIO_Port, W5500_RST_Pin, GPIO_PIN_RESET);
+  HAL_Delay(10);
+  HAL_GPIO_WritePin(W5500_RST_GPIO_Port, W5500_RST_Pin, GPIO_PIN_SET);
+  HAL_Delay(100);
+
+  wizchip_init(NULL, NULL);
 
   /* USER CODE END 2 */
 
@@ -220,7 +263,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -256,7 +299,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 0xffffffff;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -332,10 +375,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(W5500_RST_GPIO_Port, W5500_RST_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, TFT_CS_Pin|W5500_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(W5500_CS_GPIO_Port, W5500_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(TFT_RST_GPIO_Port, TFT_RST_Pin, GPIO_PIN_SET);
+  MX_SPI1_Init;
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, W5500_RST_Pin|TFT_DC_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -343,25 +390,32 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : TFT_CS_Pin W5500_CS_Pin */
+  GPIO_InitStruct.Pin = TFT_CS_Pin|W5500_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : TFT_RST_Pin */
+  GPIO_InitStruct.Pin = TFT_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(TFT_RST_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : W5500_INT_Pin */
   GPIO_InitStruct.Pin = W5500_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(W5500_INT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : W5500_RST_Pin */
-  GPIO_InitStruct.Pin = W5500_RST_Pin;
+  /*Configure GPIO pins : W5500_RST_Pin TFT_DC_Pin */
+  GPIO_InitStruct.Pin = W5500_RST_Pin|TFT_DC_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(W5500_RST_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : W5500_CS_Pin */
-  GPIO_InitStruct.Pin = W5500_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(W5500_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
