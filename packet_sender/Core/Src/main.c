@@ -66,6 +66,7 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 #include "wizchip_conf.h"
+#include "network.h"
 #include "w5500.h"
 #include "st7789.h"
 #include "fonts.h"
@@ -128,23 +129,20 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 
-  ST7789_Init();
-  HAL_Delay(100);
-  ST7789_Fill_Color(RED);
-  HAL_Delay(1000);
-  ST7789_Fill_Color(BLUE);
-  ST7789_WriteString(10, 10, "Hello World", Font_11x18, WHITE, BLACK);
+    reg_wizchip_cs_cbfunc(W5500_Select, W5500_Unselect);
+    reg_wizchip_spi_cbfunc(W5500_ReadByte, W5500_WriteByte);
+    HAL_TIM_Base_Start(&htim2);
 
-  reg_wizchip_cs_cbfunc(W5500_Select, W5500_Unselect);
-  reg_wizchip_spi_cbfunc(W5500_ReadByte, W5500_WriteByte);
+    ST7789_Init();
+    HAL_Delay(100);
 
-  // Reset W5500
-  HAL_GPIO_WritePin(W5500_RST_GPIO_Port, W5500_RST_Pin, GPIO_PIN_RESET);
-  HAL_Delay(10);
-  HAL_GPIO_WritePin(W5500_RST_GPIO_Port, W5500_RST_Pin, GPIO_PIN_SET);
-  HAL_Delay(100);
+    ST7789_Fill_Color(BLACK);
+    ST7789_WriteString(10, 10, "Booting...", Font_11x18, WHITE, BLACK);
+    HAL_Delay(500);
 
-  wizchip_init(NULL, NULL);
+    Network_Init();
+
+    ST7789_WriteString(10, 35, "Network OK", Font_11x18, GREEN, BLACK);
 
   /* USER CODE END 2 */
 
@@ -155,6 +153,26 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    Network_RunRTT();
+    
+    char rtt_str[32];
+    char min_str[32];
+    char max_str[32];
+    char pkt_str[32];
+    
+    sprintf(rtt_str, "RTT: %luus    ", rtt_stats.current_us);
+    sprintf(min_str, "MIN: %luus    ", rtt_stats.min_us);
+    sprintf(max_str, "MAX: %luus    ", rtt_stats.max_us);
+    sprintf(pkt_str, "PKT: %lu      ", rtt_stats.packet_count);
+    sprintf(pkt_str, "LOST: %lu     ", rtt_stats.lost_count);
+
+    ST7789_WriteString(10, 110, pkt_str, Font_11x18, RED, BLACK);
+    ST7789_WriteString(10, 10, rtt_str, Font_11x18, CYAN, BLACK);
+    ST7789_WriteString(10, 35, min_str, Font_11x18, GREEN, BLACK);
+    ST7789_WriteString(10, 60, max_str, Font_11x18, RED, BLACK);
+    ST7789_WriteString(10, 85, pkt_str, Font_11x18, WHITE, BLACK);
+    
+    HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }
@@ -379,7 +397,6 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(TFT_RST_GPIO_Port, TFT_RST_Pin, GPIO_PIN_SET);
-  MX_SPI1_Init;
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, W5500_RST_Pin|TFT_DC_Pin, GPIO_PIN_RESET);
