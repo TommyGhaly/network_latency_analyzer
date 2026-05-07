@@ -130,7 +130,7 @@ int main(void)
 
   ST7789_Init();
   HAL_Delay(100);
-  ST7789_Fill_Color(RED);
+  ST7789_Fill_Color(GREEN);
   HAL_Delay(1000);
   ST7789_Fill_Color(BLUE);
   ST7789_WriteString(10, 10, "Hello World", Font_11x18, WHITE, BLACK);
