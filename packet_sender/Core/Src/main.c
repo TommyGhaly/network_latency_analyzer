@@ -60,7 +60,7 @@ static void MX_I2C1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+void Display_Update(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -144,6 +144,17 @@ int main(void)
 
     ST7789_WriteString(10, 35, "Network OK", Font_11x18, GREEN, BLACK);
 
+    ST7789_Fill_Color(BLACK);
+    ST7789_WriteString(10, 5, "LATENCY ANALYZER", Font_11x18, WHITE, BLACK);
+
+    wiz_NetInfo netinfo;
+    wizchip_getnetinfo(&netinfo);
+    char ip_str[32];
+    sprintf(ip_str, "IP:%d.%d.%d.%d",
+        netinfo.ip[0], netinfo.ip[1],
+        netinfo.ip[2], netinfo.ip[3]);
+    ST7789_WriteString(10, 25, ip_str, Font_7x10, GRAY, BLACK);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -154,24 +165,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     Network_RunRTT();
-    
-    char rtt_str[32];
-    char min_str[32];
-    char max_str[32];
-    char pkt_str[32];
-    
-    sprintf(rtt_str, "RTT: %luus    ", rtt_stats.current_us);
-    sprintf(min_str, "MIN: %luus    ", rtt_stats.min_us);
-    sprintf(max_str, "MAX: %luus    ", rtt_stats.max_us);
-    sprintf(pkt_str, "PKT: %lu      ", rtt_stats.packet_count);
-    sprintf(pkt_str, "LOST: %lu     ", rtt_stats.lost_count);
-
-    ST7789_WriteString(10, 110, pkt_str, Font_11x18, RED, BLACK);
-    ST7789_WriteString(10, 10, rtt_str, Font_11x18, CYAN, BLACK);
-    ST7789_WriteString(10, 35, min_str, Font_11x18, GREEN, BLACK);
-    ST7789_WriteString(10, 60, max_str, Font_11x18, RED, BLACK);
-    ST7789_WriteString(10, 85, pkt_str, Font_11x18, WHITE, BLACK);
-    
+    Display_Update();
     HAL_Delay(100);
   }
   /* USER CODE END 3 */
@@ -445,6 +439,75 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+// This callback is called by the HAL when an external interrupt occurs. We use it to detect when a packet is received from the W5500.
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if(GPIO_Pin == W5500_INT_Pin) {
+        rx_timestamp = __HAL_TIM_GET_COUNTER(&htim2);
+        packet_received = 1;
+        // Clear W5500 interrupt flag so INT pin goes HIGH again
+        setSn_IR(0, Sn_IR_RECV);
+    }
+}
+// Display update function to show stats on the TFT. Called after each RTT measurement.
+void Display_Update(void) {
+
+    // Stats — overwrite in place
+    char rtt_str[32];
+    char avg_str[32];
+    char min_str[32];
+    char max_str[32];
+    char jit_str[32];
+    char pkt_str[32];
+
+    sprintf(rtt_str, "RTT: %7luus", rtt_stats.current_us);
+    sprintf(avg_str, "AVG: %7luus", rtt_stats.mean_us);
+    sprintf(min_str, "MIN: %7luus", rtt_stats.min_us);
+    sprintf(max_str, "MAX: %7luus", rtt_stats.max_us);
+    sprintf(jit_str, "JIT: %7luus", rtt_stats.stddev_us);
+    sprintf(pkt_str, "PKT:%-6lu LOST:%-4lu", rtt_stats.packet_count, rtt_stats.lost_count);
+
+    ST7789_WriteString(10, 55,  rtt_str, Font_11x18, CYAN,    BLACK);
+    ST7789_WriteString(10, 75,  avg_str, Font_11x18, YELLOW,  BLACK);
+    ST7789_WriteString(10, 95,  min_str, Font_11x18, GREEN,   BLACK);
+    ST7789_WriteString(10, 115, max_str, Font_11x18, RED,     BLACK);
+    ST7789_WriteString(10, 135, jit_str, Font_11x18, MAGENTA, BLACK);
+    ST7789_WriteString(10, 155, pkt_str, Font_7x10,  WHITE,   BLACK);
+
+    // Scrolling bar graph
+  uint32_t graph_max = 1;
+  for(int i = 0; i < 32; i++) {
+      if(rtt_stats.samples[i] > graph_max)
+          graph_max = rtt_stats.samples[i];
+  }
+
+  uint16_t graph_top    = 175;
+  uint16_t graph_height = 60;
+  uint16_t bar_width    = 7;
+
+  for(int i = 0; i < 32; i++) {
+      // Read samples in order starting from oldest
+      // sample_index points to the NEXT write position = oldest sample
+      uint8_t idx = (rtt_stats.sample_index + i) % 32;
+      uint32_t sample = rtt_stats.samples[idx];
+
+      uint16_t bar_h = (uint16_t)((sample * graph_height) / graph_max);
+      if(bar_h < 1) bar_h = 1;
+
+      uint16_t x = i * bar_width;
+      uint16_t y = graph_top + (graph_height - bar_h);
+
+      uint16_t color;
+      if(sample <= rtt_stats.min_us + (rtt_stats.max_us - rtt_stats.min_us) / 3)
+          color = GREEN;
+      else if(sample <= rtt_stats.min_us + 2 * (rtt_stats.max_us - rtt_stats.min_us) / 3)
+          color = YELLOW;
+      else
+          color = RED;
+
+      ST7789_Fill(x, graph_top, x + bar_width - 1, graph_top + graph_height, BLACK);
+      ST7789_Fill(x, y, x + bar_width - 1, graph_top + graph_height, color);
+  }
+}
 /* USER CODE END 4 */
 
 /**

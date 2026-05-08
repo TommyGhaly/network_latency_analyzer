@@ -17,6 +17,9 @@ extern TIM_HandleTypeDef htim2;
 // Global variable to hold RTT statistics
 RTT_Stats rtt_stats;
 
+volatile uint32_t rx_timestamp = 0;
+volatile uint8_t packet_received = 0;
+
 // DHCP callback functions
 void cb_ip_assign(void) {}
 void cb_ip_update(void) {}
@@ -120,49 +123,62 @@ void Network_Init(void) {
     DHCP_stop();
     close(0);
     socket(0, Sn_MR_UDP, 4000, 0);
+
+    // Enable socket 0 receive interrupt on W5500
+    setSn_IMR(0, Sn_IR_RECV);   // socket 0 interrupts on receive
+    setSIMR(0x01);               // enable socket 0 in global interrupt mask
 }
 
 /*
 Method to run RTT measurement. This will be called in the main loop and will handle sending packets and measuring RTT.
 */
 void Network_RunRTT(void) {
-    // Capture send Timestamp
+    // Clear flag first before anything
+    packet_received = 0;
+
+    // Capture send timestamp
     uint32_t t1 = __HAL_TIM_GET_COUNTER(&htim2);
 
-    // build the packet
+    // Build the packet
     uint8_t packet[4];
     packet[0] = (t1 >> 24) & 0xFF;
     packet[1] = (t1 >> 16) & 0xFF;
     packet[2] = (t1 >> 8)  & 0xFF;
     packet[3] = (t1)       & 0xFF;
 
-    // send the packet
+    // Send the packet
     uint8_t dest_ip[4] = {129, 158, 210, 211};
     sendto_W5x00(0, packet, 4, dest_ip, 5000);
 
-    // wait for echo with timeout
+    // Wait for ISR to set the flag
     uint32_t timeout_start = HAL_GetTick();
-    uint16_t received_size = 0;
-
-    while(received_size == 0) {
-        received_size = getSn_RX_RSR(0);
+    while(packet_received == 0) {
         if(HAL_GetTick() - timeout_start > 5000) {
             rtt_stats.lost_count++;
+            setSn_IR(0, Sn_IR_RECV);
+            setSn_IMR(0, Sn_IR_RECV);
+            setSIMR(0x01);
+            packet_received = 0;
             return;
         }
-        HAL_Delay(1);
     }
 
-    // Receive the echo
-    uint8_t recv_buf[4];
+    // Capture receive timestamp from ISR
+    uint32_t t2 = rx_timestamp;
+
+    // Drain the receive buffer
+    uint8_t recv_buf[512];
     uint8_t recv_ip[4];
     uint16_t recv_port;
-    recvfrom_W5x00(0, recv_buf, 4, recv_ip, &recv_port);
+    recvfrom_W5x00(0, recv_buf, 512, recv_ip, &recv_port);
 
-    // Capture receive Timestamp
-    uint32_t t2 = __HAL_TIM_GET_COUNTER(&htim2);
+    // Re-arm interrupt for next packet
+    setSn_IR(0, Sn_IR_RECV);
+    setSn_IMR(0, Sn_IR_RECV);
+    setSIMR(0x01);
+    packet_received = 0;
 
-    // handle timer overflow
+    // Handle timer overflow
     uint32_t ticks;
     if(t2 >= t1) {
         ticks = t2 - t1;
@@ -173,11 +189,11 @@ void Network_RunRTT(void) {
     // Convert ticks to microseconds
     uint32_t rtt_us = ticks / 84;
 
-    // Update RTT statistics
+    // Update statistics
     rtt_stats.current_us = rtt_us;
     rtt_stats.packet_count++;
 
-    // min/max
+    // Min/max
     if(rtt_stats.packet_count == 1) {
         rtt_stats.min_us = rtt_us;
         rtt_stats.max_us = rtt_us;
@@ -186,22 +202,21 @@ void Network_RunRTT(void) {
         if(rtt_us > rtt_stats.max_us) rtt_stats.max_us = rtt_us;
     }
 
-    // circular buffer
+    // Circular buffer
     rtt_stats.samples[rtt_stats.sample_index] = rtt_us;
     rtt_stats.sample_index = (rtt_stats.sample_index + 1) % 32;
 
-    // rolling mean
+    // Rolling mean
     uint32_t sum = 0;
     for(int i = 0; i < 32; i++) sum += rtt_stats.samples[i];
     uint8_t sample_count = rtt_stats.packet_count < 32 ? rtt_stats.packet_count : 32;
     rtt_stats.mean_us = sum / sample_count;
 
-    // stddev
+    // Standard deviation
     uint32_t variance = 0;
     for(int i = 0; i < 32; i++) {
         int32_t diff = (int32_t)rtt_stats.samples[i] - (int32_t)rtt_stats.mean_us;
         variance += (diff * diff);
     }
     rtt_stats.stddev_us = sqrt(variance / 32);
-
 }

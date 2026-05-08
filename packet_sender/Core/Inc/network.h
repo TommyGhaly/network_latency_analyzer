@@ -17,6 +17,9 @@ typedef struct {
 
 extern RTT_Stats rtt_stats;
 
+extern volatile uint32_t rx_timestamp;
+extern volatile uint8_t packet_received;
+
 void Network_Init(void);
 void Network_RunRTT(void);
 
