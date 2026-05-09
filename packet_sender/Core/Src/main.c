@@ -166,7 +166,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
     Network_RunRTT();
     Display_Update();
-    HAL_Delay(100);
+    HAL_Delay(20);
   }
   /* USER CODE END 3 */
 }
