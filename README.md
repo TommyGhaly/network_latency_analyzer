@@ -5,6 +5,9 @@ A bare-metal embedded systems project implementing a real-time WAN latency measu
 ---
 
 ## Demo
+## Demo
+
+https://github.com/TommyGhaly/network_latency_analyzer/raw/main/demo.mp4
 
 The device boots, negotiates a DHCP IP address on any network, and immediately begins measuring round-trip latency to a cloud echo server — displaying live statistics and a scrolling jitter graph on a 1.54" TFT display.
 
